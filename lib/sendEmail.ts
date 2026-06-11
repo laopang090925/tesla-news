@@ -2,9 +2,8 @@ import { Resend } from 'resend';
 import { buildEmailHTML, buildEmailText } from './emailTemplate';
 import type { Article } from './fetchNews';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
 export async function sendDigestEmail(articles: Article[]): Promise<void> {
+  const resend = new Resend(process.env.RESEND_API_KEY);
   const now = new Date();
   const dateLabel = now.toLocaleDateString('zh-CN', {
     year: 'numeric',
