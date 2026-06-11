@@ -44,7 +44,10 @@ export async function fetchNewsAPI(): Promise<Article[]> {
 
     return data.articles
       .filter((a: { title?: string; description?: string; url?: string }) =>
-        a.title && a.url && !a.url.includes('[Removed]')
+        a.title &&
+        a.url &&
+        !a.url.includes('[Removed]') &&
+        isTeslaRelated(a.title, a.description ?? '')
       )
       .slice(0, 15)
       .map(
