@@ -4,6 +4,7 @@ import { filterDuplicates, saveSeenUrls } from '@/lib/dedup';
 import { sendDigestEmail } from '@/lib/sendEmail';
 
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 export async function GET(request: Request) {
