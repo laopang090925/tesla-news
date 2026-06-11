@@ -8,10 +8,11 @@ export interface Article {
 }
 
 const TESLA_KEYWORDS = [
-  'tesla', '特斯拉', 'model 3', 'model y', 'model s', 'model x',
+  'tesla', '特斯拉', 'model 3', 'model y', 'model yl', 'model s', 'model x',
   'model 2', 'cybertruck', 'roadster', '4680', 'gigafactory shanghai',
   'shanghai gigafactory', 'supercharger', 'tsla', 'tesla autopilot',
   'full self-driving', 'fsd', 'tesla semi', 'tesla powerwall',
+  'model yl', '上海超级工厂', '长轴距',
 ];
 
 function isTeslaRelated(title: string, description: string): boolean {
@@ -19,11 +20,11 @@ function isTeslaRelated(title: string, description: string): boolean {
   return TESLA_KEYWORDS.some((kw) => text.includes(kw));
 }
 
-// ── NewsAPI ──────────────────────────────────────────────────────────────────
+// ── NewsAPI 英文 ──────────────────────────────────────────────────────────────
 
 export async function fetchNewsAPI(): Promise<Article[]> {
   const query =
-    'Tesla OR "Model Y" OR "Model 3" OR "Model X" OR "Cybertruck" OR "4680 battery" OR "Shanghai Gigafactory" OR "Tesla Semi"';
+    'Tesla OR "Model Y" OR "Model YL" OR "Model 3" OR "Model X" OR "Cybertruck" OR "4680 battery" OR "Shanghai Gigafactory" OR "Tesla Semi"';
   const yesterday = new Date();
   yesterday.setDate(yesterday.getDate() - 1);
   const from = yesterday.toISOString().split('T')[0];
@@ -68,7 +69,55 @@ export async function fetchNewsAPI(): Promise<Article[]> {
         })
       );
   } catch (e) {
-    console.error('NewsAPI fetch failed:', e);
+    console.error('NewsAPI EN fetch failed:', e);
+    return [];
+  }
+}
+
+// ── NewsAPI 中文 ──────────────────────────────────────────────────────────────
+
+export async function fetchNewsAPIZh(): Promise<Article[]> {
+  const query = '特斯拉 OR "Model YL" OR "Model Y" OR "上海超级工厂" OR "4680电池" OR "超级充电"';
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const from = yesterday.toISOString().split('T')[0];
+
+  const url =
+    `https://newsapi.org/v2/everything` +
+    `?q=${encodeURIComponent(query)}` +
+    `&language=zh` +
+    `&sortBy=publishedAt` +
+    `&from=${from}` +
+    `&pageSize=20` +
+    `&apiKey=${process.env.NEWS_API_KEY}`;
+
+  try {
+    const res = await fetch(url, { cache: 'no-store' });
+    const data = await res.json();
+    if (!data.articles) return [];
+
+    return data.articles
+      .filter((a: { title?: string; url?: string }) =>
+        a.title && a.url && !a.url.includes('[Removed]')
+      )
+      .slice(0, 10)
+      .map(
+        (a: {
+          title: string;
+          url: string;
+          source: { name: string };
+          publishedAt: string;
+          description?: string;
+        }) => ({
+          title: a.title,
+          url: a.url,
+          source: a.source.name,
+          publishedAt: a.publishedAt,
+          description: a.description ?? '',
+        })
+      );
+  } catch (e) {
+    console.error('NewsAPI ZH fetch failed:', e);
     return [];
   }
 }
@@ -79,6 +128,8 @@ const RSS_FEEDS = [
   { url: 'https://electrek.co/feed/', source: 'Electrek' },
   { url: 'https://insideevs.com/feed/', source: 'InsideEVs' },
   { url: 'https://cleantechnica.com/feed/', source: 'CleanTechnica' },
+  { url: 'https://www.teslarati.com/feed/', source: 'Teslarati' },
+  { url: 'https://www.notateslaapp.com/rss.xml', source: 'Not a Tesla App' },
 ];
 
 function extractTagContent(xml: string, tag: string): string {
@@ -88,7 +139,13 @@ function extractTagContent(xml: string, tag: string): string {
   );
   const m = pattern.exec(xml);
   if (!m) return '';
-  return m[1].trim().replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/<[^>]+>/g, '');
+  return m[1]
+    .trim()
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/<[^>]+>/g, '');
 }
 
 function parseRSS(xml: string, source: string): Article[] {
@@ -97,13 +154,12 @@ function parseRSS(xml: string, source: string): Article[] {
   let match;
 
   const cutoff = new Date();
-  cutoff.setHours(cutoff.getHours() - 36); // 过去36小时
+  cutoff.setHours(cutoff.getHours() - 36);
 
   while ((match = itemPattern.exec(xml)) !== null) {
     const item = match[1];
     const title = extractTagContent(item, 'title');
 
-    // 提取 link（RSS 2.0 的 <link> 有时是自闭合标签）
     let url = extractTagContent(item, 'link');
     if (!url) {
       const guidMatch = /<guid[^>]*>([^<]+)<\/guid>/.exec(item);
@@ -144,15 +200,16 @@ export async function fetchRSSFeeds(): Promise<Article[]> {
 // ── 合并去重 ─────────────────────────────────────────────────────────────────
 
 export async function fetchAllNews(): Promise<Article[]> {
-  const [newsApiArticles, rssArticles] = await Promise.all([
+  const [enArticles, zhArticles, rssArticles] = await Promise.all([
     fetchNewsAPI(),
+    fetchNewsAPIZh(),
     fetchRSSFeeds(),
   ]);
 
   const seen = new Set<string>();
   const all: Article[] = [];
 
-  for (const article of [...newsApiArticles, ...rssArticles]) {
+  for (const article of [...enArticles, ...zhArticles, ...rssArticles]) {
     const key = article.url.split('?')[0];
     if (!seen.has(key)) {
       seen.add(key);
@@ -165,7 +222,7 @@ export async function fetchAllNews(): Promise<Article[]> {
     .sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime())
     .slice(0, 20);
 
-  // 翻译成中文
+  // 英文内容翻译成中文（中文内容原样保留）
   const { translateArticles } = await import('./translate');
   return translateArticles(sorted);
 }

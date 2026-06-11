@@ -1,7 +1,11 @@
 import type { Article } from './fetchNews';
 
+function isAlreadyChinese(text: string): boolean {
+  return /[一-鿿]/.test(text);
+}
+
 async function translateToZh(text: string): Promise<string> {
-  if (!text.trim()) return text;
+  if (!text.trim() || isAlreadyChinese(text)) return text;
   try {
     const url =
       `https://translate.googleapis.com/translate_a/single` +
