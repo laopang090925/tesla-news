@@ -153,7 +153,7 @@ export async function fetchAllNews(): Promise<Article[]> {
   const all: Article[] = [];
 
   for (const article of [...newsApiArticles, ...rssArticles]) {
-    const key = article.url.split('?')[0]; // 去掉 query string 再比较
+    const key = article.url.split('?')[0];
     if (!seen.has(key)) {
       seen.add(key);
       all.push(article);
@@ -161,7 +161,11 @@ export async function fetchAllNews(): Promise<Article[]> {
   }
 
   // 按时间倒序，最多返回20条
-  return all
+  const sorted = all
     .sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime())
     .slice(0, 20);
+
+  // 翻译成中文
+  const { translateArticles } = await import('./translate');
+  return translateArticles(sorted);
 }
